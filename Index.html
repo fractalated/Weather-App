@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Links</title>
+    <link rel="icon" href="path/to/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="path/to/apple-touch-icon.png">
+    <style>
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #121212;
+            border: 5px solid #888888;
+            padding: 20px;
+            width: 90%;
+            max-width: 1200px;
+            box-sizing: border-box;
+        }
+        .button {
+            background-color: #1e88e5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .iframe-container {
+            margin-top: 20px;
+            width: 100%;
+            height: calc(100vh - 200px); /* Adjust height to fit within the viewport */
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        @media (min-width: 600px) {
+            .button {
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <main>
+            <button class="button" onclick="openLink('https://weather.cod.edu/forecast/')">Forecast Radar</button>
+            <button class="button" onclick="openLink('https://weather.cod.edu/text/')">NWS Data by State</button>
+            <button class="button" onclick="openLink('https://weather.cod.edu/text/')">Severe Weather Outlook</button>
+            <button class="button" onclick="openLink('https://weather.cod.edu/satrad/')">Satellite Imagery</button>
+            <button class="button" onclick="openLink('https://weather.cod.edu/satrad/?parms=continental-conus-comp_radar-24-0-100-1&checked=map&colorbar=undefined')">Radar</button>
+            <div class="iframe-container" id="iframe-container"></div>
+        </main>
+    </div>
+
+    <script>
+        function openLink(link) {
+            const iframeContainer = document.getElementById('iframe-container');
+            iframeContainer.innerHTML = `<iframe src="${link}"></iframe>`;
+        }
+    </script>
+</body>
+</html>
