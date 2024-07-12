@@ -22,7 +22,6 @@
         }
 
         .buttons-frame, .content-frame {
-            flex: 1;
             padding: 10px;
         }
 
@@ -32,6 +31,13 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            flex-basis: 20%;
+        }
+
+        .content-frame {
+            background-color: #2e2e2e;
+            overflow: auto;
+            flex-basis: 80%;
         }
 
         .buttons-frame a {
@@ -50,11 +56,6 @@
             background-color: #555;
         }
 
-        .content-frame {
-            background-color: #2e2e2e;
-            overflow: auto;
-        }
-
         iframe {
             width: 100%;
             height: 100%;
@@ -64,6 +65,14 @@
         @media (max-width: 768px) {
             .container {
                 flex-direction: column-reverse;
+            }
+
+            .buttons-frame {
+                flex-basis: 20%;
+            }
+
+            .content-frame {
+                flex-basis: 80%;
             }
 
             .buttons-frame a {
