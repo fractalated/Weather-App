@@ -69,9 +69,10 @@
 
             .buttons-frame {
                 flex-basis: 20%;
-                flex-direction: row;
-                flex-wrap: wrap;
-                justify-content: space-around;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                justify-content: center;
             }
 
             .content-frame {
@@ -79,8 +80,8 @@
             }
 
             .buttons-frame a {
-                width: 45%;
-                margin: 5px;
+                width: 100%;
+                margin: 0;
             }
         }
     </style>
