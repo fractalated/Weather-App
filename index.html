@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Dark Theme Webpage</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            border: 1px solid grey;
+        }
+
+        .buttons-frame, .content-frame {
+            flex: 1;
+            padding: 10px;
+        }
+
+        .buttons-frame {
+            background-color: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .buttons-frame a {
+            margin: 10px;
+            padding: 10px 20px;
+            background-color: #333;
+            color: #fff;
+            text-decoration: none;
+            border: 1px solid grey;
+            border-radius: 5px;
+            text-align: center;
+            width: 80%;
+        }
+
+        .buttons-frame a:hover {
+            background-color: #555;
+        }
+
+        .content-frame {
+            background-color: #2e2e2e;
+            overflow: auto;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column-reverse;
+            }
+
+            .buttons-frame a {
+                width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="buttons-frame">
+            <a href="https://example.com" target="content-frame">Button 1</a>
+            <a href="https://example.com" target="content-frame">Button 2</a>
+            <a href="https://example.com" target="content-frame">Button 3</a>
+            <a href="https://example.com" target="content-frame">Button 4</a>
+        </div>
+        <div class="content-frame">
+            <iframe name="content-frame"></iframe>
+        </div>
+    </div>
+</body>
+</html>
