@@ -120,14 +120,21 @@
 <body>
     <div class="container">
         <div class="buttons-frame">
-            <a href="https://example.com" target="content-frame">Button 1</a>
+            <a href="#" id="radarButton">Radar</a>
             <a href="https://example.com" target="content-frame">Button 2</a>
             <a href="https://example.com" target="content-frame">Button 3</a>
             <a href="https://example.com" target="content-frame">Button 4</a>
         </div>
         <div class="content-frame">
-            <iframe name="content-frame"></iframe>
+            <iframe id="mainFrame" name="content-frame"></iframe>
         </div>
     </div>
+
+    <script>
+        document.getElementById('radarButton').addEventListener('click', function(event) {
+            event.preventDefault();
+            document.getElementById('mainFrame').src = "https://radar.weather.gov/ridge/standard/CONUS_loop.gif?c=";
+        });
+    </script>
 </body>
 </html>
