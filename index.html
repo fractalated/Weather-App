@@ -128,26 +128,14 @@
     <div class="container">
         <div class="buttons-frame">
             <div class="label">Current Conditions</div>
-            <a href="#" id="radarButton1">Radar</a>
+            <a href="https://radar.weather.gov/ridge/standard/CONUS_loop.gif?c=" target="content-frame">Radar</a>
             <a href="https://example.com" target="content-frame">Button 2</a>
-            <a href="#" id="radarButton2">Radar</a>
+            <a href="https://www.ready.noaa.gov/data/forecast/grads/hrrrp/panel11/anim.gif" target="content-frame">Radar</a>
             <a href="https://example.com" target="content-frame">Button 4</a>
         </div>
         <div class="content-frame">
             <iframe id="mainFrame" name="content-frame"></iframe>
         </div>
     </div>
-
-    <script>
-        document.getElementById('radarButton1').addEventListener('click', function(event) {
-            event.preventDefault();
-            document.getElementById('mainFrame').src = "https://radar.weather.gov/ridge/standard/CONUS_loop.gif?c=";
-        });
-
-        document.getElementById('radarButton2').addEventListener('click', function(event) {
-            event.preventDefault();
-            document.getElementById('mainFrame').src = "https://www.ready.noaa.gov/data/forecast/grads/hrrrp/panel11/anim.gif";
-        });
-    </script>
 </body>
 </html>
