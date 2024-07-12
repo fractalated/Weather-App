@@ -32,7 +32,6 @@
             background-color: #1e1e1e;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
             flex-basis: 20%;
         }
@@ -91,7 +90,8 @@
             }
         }
 
-        @media (max-width: 768px) and (orientation: landscape) {
+        @media (max-width: 768px) and (orientation: landscape),
+        @media (min-width: 769px) {
             .container {
                 flex-direction: row;
             }
@@ -100,9 +100,9 @@
                 flex-basis: 20%;
                 display: flex;
                 flex-direction: column;
-                justify-content: center;
                 align-items: center;
                 padding-bottom: 0;
+                justify-content: flex-start; /* Align buttons to the top */
             }
 
             .content-frame {
