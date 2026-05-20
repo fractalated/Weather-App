@@ -132,7 +132,7 @@
         }
         .tl-btn:hover { background: #1c1c1c; color: #eee; }
 
-        .tl-label { font-size: 0.78rem; color: #888; min-width: 82px; text-align: center; }
+        .tl-label { font-size: 0.78rem; color: #888; min-width: 110px; text-align: center; }
         .tl-src   { font-size: 0.62rem; color: #333; }
 
         /* ── HRRR (Leaflet) ────────────────────────────────────── */
@@ -405,19 +405,43 @@ function toggleRadarPlay() {
     }
 }
 
+// ── HRRR time helpers ────────────────────────────────────────────────────────
+// HRRR runs hourly. Data is available ~45 min after the nominal run time,
+// so subtract 45 min from now and floor to the previous hour to get the
+// most recent likely-available run.
+function hrrrRunTime() {
+    const adjusted = Date.now() - 45 * 60 * 1000;
+    return new Date(Math.floor(adjusted / 3_600_000) * 3_600_000);
+}
+
+// Format a Date as a compact local time, prefixing with "Tmrw" or a short
+// weekday name when the valid time crosses into a different calendar day.
+function fmtHrrrTime(date) {
+    const now      = new Date();
+    const timeStr  = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const dateStr  = date.toDateString();
+    if (dateStr === now.toDateString())
+        return timeStr;
+    if (dateStr === new Date(now.getTime() + 86_400_000).toDateString())
+        return 'Tmrw ' + timeStr;
+    return date.toLocaleDateString([], { weekday: 'short' }) + ' ' + timeStr;
+}
+
 // ── HRRR Leaflet map ─────────────────────────────────────────────────────────
 function buildHrrrLayers() {
     hrrrLayers = [];
+    const runTime = hrrrRunTime();
 
     for (let h = 0; h <= HRRR_MAX_HOUR; h++) {
-        const minutes   = h * 60;
-        const layerName = 'refd_' + String(minutes).padStart(4, '0');
+        const minutes    = h * 60;
+        const layerName  = 'refd_' + String(minutes).padStart(4, '0');
+        const validTime  = new Date(runTime.getTime() + h * 3_600_000);
 
         const layer = L.tileLayer.wms(HRRR_WMS, {
             layers:      layerName,
             format:      'image/png',
             transparent: true,
-            opacity:     0,         // preload at invisible; opacity swap drives animation
+            opacity:     0,
             version:     '1.3.0',
             zIndex:      5
         });
@@ -428,7 +452,7 @@ function buildHrrrLayers() {
         });
 
         layer.addTo(hrrrMap);
-        hrrrLayers.push({ hour: h, layer });
+        hrrrLayers.push({ hour: h, validTime, layer });
     }
 
     hrrrIdx = 0;
@@ -438,9 +462,9 @@ function buildHrrrLayers() {
 function showHrrrFrame(i) {
     if (!hrrrLayers.length || !hrrrMap) return;
     hrrrLayers.forEach((e, idx) => e.layer.setOpacity(idx === i ? HRRR_OPACITY : 0));
-    const h = hrrrLayers[i].hour;
+    const { hour, validTime } = hrrrLayers[i];
     document.getElementById('hrrr-lbl').textContent =
-        h === 0 ? 'Analysis' : `F+${String(h).padStart(2, '0')}h`;
+        fmtHrrrTime(validTime) + (hour === 0 ? ' ★' : '');
 }
 
 function stepHrrr(dir) {
