@@ -104,6 +104,20 @@
         }
         .loc-btn:hover { color: #e09040; border-color: #7a5020; }
 
+        .reload-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .city-label {
+            display: none; /* shown by JS when location available */
+            font-size: 0.65rem;
+            color: #555;
+            text-align: center;
+        }
+
         .reload-time {
             font-size: 0.58rem;
             color: #333;
@@ -236,7 +250,7 @@
                 flex-direction: row;
                 flex-wrap: wrap;
                 justify-content: center;
-                padding: 8px 10px env(safe-area-inset-bottom, 6px);
+                padding: 8px 10px calc(env(safe-area-inset-bottom, 20px) + 14px);
                 border-right: none;
                 border-top: 1px solid #2a2a2a;
                 gap: 8px 8px;
@@ -254,8 +268,10 @@
                 padding: 2px 0 0;
                 gap: 10px;
             }
-            .reload-btn { width: auto; padding: 6px 16px; font-size: 0.8rem; }
-            .loc-btn    { width: auto; padding: 6px 14px; font-size: 0.75rem; }
+            .reload-btn  { width: auto; padding: 6px 16px; font-size: 0.8rem; }
+            .loc-btn     { width: auto; padding: 5px 12px; font-size: 0.75rem; }
+            .reload-info { align-items: flex-start; gap: 2px; }
+            .city-label  { font-size: 0.72rem; }
             .reload-time { display: block; font-size: 0.72rem; color: #555; min-height: unset; }
             .loc-pill { display: none; }
             .nav-btn {
@@ -277,8 +293,11 @@
         <button class="nav-btn"        onclick="showView('afd',   this)">AFD</button>
         <div class="sidebar-bottom">
             <button class="reload-btn" onclick="reloadAll()">↻ Reload</button>
-            <button class="loc-btn" id="loc-btn" onclick="requestLocation()">📍 Use Location</button>
-            <div class="reload-time" id="reload-time"></div>
+            <div class="reload-info">
+                <button class="loc-btn" id="loc-btn" onclick="requestLocation()">📍 Use Location</button>
+                <div class="city-label" id="city-label"></div>
+                <div class="reload-time" id="reload-time"></div>
+            </div>
             <div class="loc-pill" id="loc-pill">Locating…</div>
         </div>
     </nav>
@@ -620,6 +639,28 @@ async function loadAFD(force = false) {
     }
 }
 
+// ── Reverse geocoding ────────────────────────────────────────────────────────
+let geoCacheCity = null, geoCacheLat = null, geoCacheLon = null;
+
+async function reverseGeocode(lat, lon) {
+    if (lat === geoCacheLat && lon === geoCacheLon && geoCacheCity !== null) return geoCacheCity;
+    try {
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&zoom=10`
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        const addr = data.address || {};
+        const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county || '';
+        const stateCode = (addr['ISO3166-2-lvl4'] || '').split('-')[1] || addr.state || '';
+        const result = city && stateCode ? `${city}, ${stateCode}` : city || stateCode || null;
+        geoCacheLat = lat; geoCacheLon = lon; geoCacheCity = result;
+        return result;
+    } catch (_) {
+        return null;
+    }
+}
+
 // ── Location helpers ─────────────────────────────────────────────────────────
 // Try the Geolocation API; on failure fall back to a localStorage-cached fix
 // (saved from any previous successful session), then to the CONUS centre.
@@ -653,8 +694,20 @@ function applyLocation(la, lo, approximate) {
         ? 'Location\nunavailable'
         : (la >= 0 ? la.toFixed(3) + '°N' : Math.abs(la).toFixed(3) + '°S') + '\n' +
           (lo >= 0 ? lo.toFixed(3) + '°E' : Math.abs(lo).toFixed(3) + '°W');
-    const locBtn = document.getElementById('loc-btn');
-    if (locBtn) locBtn.style.display = approximate ? '' : 'none';
+
+    const locBtn   = document.getElementById('loc-btn');
+    const cityLabel = document.getElementById('city-label');
+    if (approximate) {
+        if (locBtn)    { locBtn.style.display = ''; locBtn.textContent = '📍 Use Location'; }
+        if (cityLabel) cityLabel.style.display = 'none';
+    } else {
+        if (locBtn)    locBtn.style.display = 'none';
+        if (cityLabel) { cityLabel.style.display = ''; cityLabel.textContent = ''; }
+        reverseGeocode(la, lo).then(city => {
+            const el = document.getElementById('city-label');
+            if (el && city) el.textContent = city;
+        });
+    }
 }
 
 // Called directly from the loc-btn onclick so iOS treats it as a user gesture,
@@ -694,13 +747,8 @@ function requestLocation() {
 // it in Settings → Privacy → Location Services, then tap Reload.
 function updateReloadTime() {
     const el = document.getElementById('reload-time');
-    if (locationApproximate) {
-        el.style.color = '#b07030';
-        el.textContent = 'Enable location in Settings';
-    } else {
-        el.style.color = '';
-        el.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    }
+    el.style.color = '';
+    el.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 function reloadAll() {
