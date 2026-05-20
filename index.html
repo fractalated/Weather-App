@@ -304,9 +304,12 @@ let userLat = null, userLon = null;
 let radarMap = null;
 
 // Radar animation state
-const RADAR_FRAMES = 12;          // 12 × 5 min = 1 hr loop
+const RADAR_FRAMES      = 12;             // 12 × 5 min = 1 hr loop
 const RADAR_INTERVAL_MS = 5 * 60 * 1000;
-let radarLayers = [];             // [{isoTime, layer}]
+const RADAR_OPACITY     = 0.75;
+const ANIM_INTERVAL_MS  = 650;            // ms between frames during playback
+const FADE_MS           = 350;            // crossfade duration
+let radarLayers = [];                     // [{iso, layer}]
 let radarIdx = 0;
 let radarTimer = null;
 
@@ -345,28 +348,36 @@ function makeBullseye() {
 }
 
 // ── Build time-stamped WMS layers for animation ──────────────────────────────
-// Generates RADAR_FRAMES layers stepping back in 5-min increments.
-// NWS WMS supports the TIME parameter (ISO 8601) for historical NEXRAD data.
+// All frames are added to the map at opacity 0 immediately so their tiles
+// download into the browser cache. Frame switching then only changes opacity,
+// eliminating the remove/re-add flash.  A CSS transition on each layer's
+// container element provides the crossfade.
 function buildRadarLayers() {
     radarLayers = [];
     const now = Date.now();
 
     for (let i = RADAR_FRAMES - 1; i >= 0; i--) {
-        // Round each step to the nearest 5-minute mark
-        const raw = now - i * RADAR_INTERVAL_MS;
+        const raw     = now - i * RADAR_INTERVAL_MS;
         const snapped = Math.floor(raw / RADAR_INTERVAL_MS) * RADAR_INTERVAL_MS;
-        const iso = new Date(snapped).toISOString();
+        const iso     = new Date(snapped).toISOString();
 
         const layer = L.tileLayer.wms(NWS_WMS, {
             layers:      'conus_bref_qcd',
             format:      'image/png',
             transparent: true,
-            opacity:     0.75,
+            opacity:     0,       // invisible until selected; tiles still preload
             version:     '1.3.0',
             zIndex:      5,
             TIME:        iso
         });
 
+        // Wire up the CSS transition as soon as Leaflet creates the container
+        layer.on('add', function () {
+            const el = this.getContainer();
+            if (el) el.style.transition = `opacity ${FADE_MS}ms ease-in-out`;
+        });
+
+        layer.addTo(radarMap);    // triggers tile fetch
         radarLayers.push({ iso, layer });
     }
 
@@ -376,13 +387,11 @@ function buildRadarLayers() {
 
 // ── Display a radar frame ────────────────────────────────────────────────────
 function showRadarFrame(i) {
-    const entry = radarLayers[i];
-    if (!entry || !radarMap) return;
+    if (!radarLayers.length || !radarMap) return;
+    // Opacity-only swap — no remove/add so tiles never flash
+    radarLayers.forEach((e, idx) => e.layer.setOpacity(idx === i ? RADAR_OPACITY : 0));
 
-    radarLayers.forEach(e => { if (radarMap.hasLayer(e.layer)) radarMap.removeLayer(e.layer); });
-    entry.layer.addTo(radarMap);
-
-    const d = new Date(entry.iso);
+    const d = new Date(radarLayers[i].iso);
     document.getElementById('radar-lbl').textContent =
         d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
         (i === radarLayers.length - 1 ? ' ★' : '');
@@ -399,11 +408,14 @@ function toggleRadarPlay() {
         clearInterval(radarTimer);
         radarTimer = null;
         document.getElementById('radar-play').textContent = '▶ Play';
+        // Snap back to the most current frame when playback stops
+        radarIdx = radarLayers.length - 1;
+        showRadarFrame(radarIdx);
     } else {
         radarTimer = setInterval(() => {
             radarIdx = (radarIdx + 1) % radarLayers.length;
             showRadarFrame(radarIdx);
-        }, 500);
+        }, ANIM_INTERVAL_MS);
         document.getElementById('radar-play').textContent = '⏸ Pause';
     }
 }
