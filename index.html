@@ -61,13 +61,44 @@
         .nav-btn:hover  { background: #272727; color: #ddd; }
         .nav-btn.active { background: #12374f; border-color: #1f6896; color: #eee; }
 
-        .loc-pill {
+        /* ── Sidebar bottom cluster (reload + coords) ─────────── */
+        .sidebar-bottom {
             margin-top: auto;
-            font-size: 0.62rem;
-            color: #3a3a3a;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            padding-top: 8px;
+        }
+
+        .reload-btn {
+            width: 90%;
+            padding: 8px 4px;
+            background: none;
+            color: #484848;
+            border: 1px solid #272727;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            touch-action: manipulation;
+            transition: color 0.12s, border-color 0.12s;
+        }
+        .reload-btn:hover { color: #999; border-color: #3a3a3a; }
+
+        .reload-time {
+            font-size: 0.58rem;
+            color: #333;
+            text-align: center;
+            min-height: 1em;
+        }
+
+        .loc-pill {
+            font-size: 0.58rem;
+            color: #2e2e2e;
             text-align: center;
             white-space: pre-line;
-            line-height: 1.6;
+            line-height: 1.5;
         }
 
         /* ── Content area ──────────────────────────────────────── */
@@ -205,7 +236,10 @@
                 flex-shrink: 0;
                 height: auto;
             }
-            .sidebar-label, .loc-pill { display: none; }
+            .sidebar-label { display: none; }
+            .sidebar-bottom { margin-top: 0; width: auto; flex-direction: row; padding-top: 0; gap: 0; }
+            .reload-btn { width: auto; padding: 11px 10px; font-size: 0.84rem; }
+            .reload-time, .loc-pill { display: none; }
             .nav-btn {
                 width: auto;
                 flex: 1;
@@ -223,7 +257,11 @@
         <button class="nav-btn active" onclick="showView('radar', this)">Radar</button>
         <button class="nav-btn"        onclick="showView('hrrr',  this)">Forecast</button>
         <button class="nav-btn"        onclick="showView('afd',   this)">AFD</button>
-        <div class="loc-pill" id="loc-pill">Locating…</div>
+        <div class="sidebar-bottom">
+            <button class="reload-btn" onclick="reloadAll()">↻ Reload</button>
+            <div class="reload-time" id="reload-time"></div>
+            <div class="loc-pill" id="loc-pill">Locating…</div>
+        </div>
     </nav>
 
     <main class="content">
@@ -562,6 +600,41 @@ async function loadAFD(force = false) {
     }
 }
 
+// ── Reload all data ──────────────────────────────────────────────────────────
+function updateReloadTime() {
+    document.getElementById('reload-time').textContent =
+        'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function reloadAll() {
+    // Stop any running animations
+    if (radarTimer) { clearInterval(radarTimer); radarTimer = null; document.getElementById('radar-play').textContent = '▶ Play'; }
+    if (hrrrTimer)  { clearInterval(hrrrTimer);  hrrrTimer  = null; document.getElementById('hrrr-play').textContent  = '▶ Play'; }
+
+    // Rebuild radar layers with fresh timestamps
+    if (radarMap) {
+        radarLayers.forEach(e => radarMap.removeLayer(e.layer));
+        radarLayers = [];
+        buildRadarLayers();
+    }
+
+    // Rebuild HRRR layers if the map has been initialised; otherwise it
+    // will pick up a fresh run time the next time the tab is opened.
+    if (hrrrMap) {
+        hrrrLayers.forEach(e => hrrrMap.removeLayer(e.layer));
+        hrrrLayers = [];
+        buildHrrrLayers();
+    } else {
+        hrrrLayers = [];
+    }
+
+    // Mark AFD stale; refetch immediately if that tab is currently visible
+    afdLoaded = false;
+    if (document.getElementById('view-afd').classList.contains('active')) loadAFD();
+
+    updateReloadTime();
+}
+
 // ── Geolocation & boot ───────────────────────────────────────────────────────
 function start(la, lo) {
     userLat = la;
@@ -570,6 +643,7 @@ function start(la, lo) {
     const lonStr = lo >= 0 ? lo.toFixed(3) + '°E' : Math.abs(lo).toFixed(3) + '°W';
     document.getElementById('loc-pill').textContent = latStr + '\n' + lonStr;
     initRadarMap();
+    updateReloadTime();
 }
 
 if (navigator.geolocation) {
