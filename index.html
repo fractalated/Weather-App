@@ -312,6 +312,7 @@
 let userLat = null, userLon = null;
 let radarMap = null, hrrrMap = null;
 let radarMarker = null, hrrrMarker = null;
+let locationApproximate = false;
 
 // Radar animation state
 const RADAR_FRAMES      = 12;             // 12 × 5 min = 1 hr loop
@@ -630,6 +631,7 @@ function geolocate(callback) {
 
 function applyLocation(la, lo, approximate) {
     userLat = la; userLon = lo;
+    locationApproximate = approximate;
     document.getElementById('loc-pill').textContent = approximate
         ? 'Location\nunavailable'
         : (la >= 0 ? la.toFixed(3) + '°N' : Math.abs(la).toFixed(3) + '°S') + '\n' +
@@ -637,13 +639,22 @@ function applyLocation(la, lo, approximate) {
 }
 
 // ── Reload all data ──────────────────────────────────────────────────────────
+// Shows an error hint when location is unavailable so the user knows to enable
+// it in Settings → Privacy → Location Services, then tap Reload.
 function updateReloadTime() {
-    document.getElementById('reload-time').textContent =
-        'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const el = document.getElementById('reload-time');
+    if (locationApproximate) {
+        el.style.color = '#b07030';
+        el.textContent = 'Enable location in Settings';
+    } else {
+        el.style.color = '';
+        el.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
 }
 
 function reloadAll() {
-    updateReloadTime();
+    document.getElementById('reload-time').textContent = 'Locating…';
+    document.getElementById('reload-time').style.color = '';
 
     // Stop any running animations
     if (radarTimer) { clearInterval(radarTimer); radarTimer = null; document.getElementById('radar-play').textContent = '▶ Play'; }
@@ -654,6 +665,7 @@ function reloadAll() {
     geolocate((la, lo, approximate) => {
         const moved = la !== userLat || lo !== userLon;
         applyLocation(la, lo, approximate);
+        updateReloadTime();
 
         if (moved) {
             if (radarMap && radarMarker) { radarMap.setView([la, lo], radarMap.getZoom()); radarMarker.setLatLng([la, lo]); }
