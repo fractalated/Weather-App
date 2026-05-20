@@ -55,6 +55,7 @@
             font-size: 0.86rem;
             font-weight: 500;
             transition: background 0.12s, color 0.12s;
+            touch-action: manipulation; /* tap ok; block pinch-zoom on buttons */
         }
 
         .nav-btn:hover  { background: #272727; color: #ddd; }
@@ -127,6 +128,7 @@
             padding: 3px 9px;
             cursor: pointer;
             font-size: 0.8rem;
+            touch-action: manipulation;
         }
         .tl-btn:hover { background: #1c1c1c; color: #eee; }
 
@@ -189,6 +191,7 @@
             padding: 3px 9px;
             cursor: pointer;
             font-size: 0.7rem;
+            touch-action: manipulation;
         }
         .afd-refresh:hover { background: #1a1a1a; color: #bbb; }
 
@@ -422,7 +425,7 @@ function toggleRadarPlay() {
 
 // ── Init Leaflet radar map ───────────────────────────────────────────────────
 function initRadarMap() {
-    radarMap = L.map('map-radar').setView([userLat, userLon], 7);
+    radarMap = L.map('map-radar', { touchZoom: true, tap: false }).setView([userLat, userLon], 7);
 
     L.tileLayer(
         'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
