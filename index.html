@@ -2,140 +2,493 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Responsive Dark Theme Webpage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Weather Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
-            display: flex;
-            flex-direction: column;
+            font-family: -apple-system, Arial, sans-serif;
+            background: #111;
+            color: #eee;
+            overflow: hidden;
             height: 100vh;
-            overflow: hidden;
+            height: 100dvh;
         }
 
-        .container {
+        .app {
             display: flex;
-            flex: 1;
-            border: 1px solid grey;
-            overflow: hidden;
+            height: 100vh;
+            height: 100dvh;
         }
 
-        .buttons-frame, .content-frame {
-            padding: 10px;
-            box-sizing: border-box;
-        }
-
-        .buttons-frame {
-            background-color: #1e1e1e;
+        /* ── Sidebar ───────────────────────────────────────────── */
+        .sidebar {
+            width: 126px;
+            background: #181818;
+            border-right: 1px solid #2a2a2a;
             display: flex;
             flex-direction: column;
             align-items: center;
-            flex-basis: 20%;
+            padding: 14px 8px 10px;
+            gap: 7px;
+            flex-shrink: 0;
         }
 
-        .content-frame {
-            background-color: #2e2e2e;
-            overflow: auto;
-            flex-basis: 80%;
+        .sidebar-label {
+            font-size: 0.62rem;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            color: #3d3d3d;
+            margin-bottom: 2px;
         }
 
-        .buttons-frame a {
-            margin: 10px;
-            padding: 10px 20px;
-            background-color: #333;
-            color: #fff;
-            text-decoration: none;
-            border: 1px solid grey;
+        .nav-btn {
+            width: 100%;
+            padding: 11px 4px;
+            background: #202020;
+            color: #aaa;
+            border: 1px solid #303030;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 0.86rem;
+            font-weight: 500;
+            transition: background 0.12s, color 0.12s;
+        }
+
+        .nav-btn:hover  { background: #272727; color: #ddd; }
+        .nav-btn.active { background: #12374f; border-color: #1f6896; color: #eee; }
+
+        .loc-pill {
+            margin-top: auto;
+            font-size: 0.62rem;
+            color: #3a3a3a;
+            text-align: center;
+            white-space: pre-line;
+            line-height: 1.6;
+        }
+
+        /* ── Content area ──────────────────────────────────────── */
+        .content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .view {
+            display: none;
+            position: absolute;
+            inset: 0;
+            flex-direction: column;
+        }
+        .view.active { display: flex; }
+
+        #map-radar, #map-hrrr { flex: 1; min-height: 0; }
+
+        /* ── Map overlays ──────────────────────────────────────── */
+        .map-badge {
+            position: absolute;
+            top: 10px;
+            right: 50px;
+            z-index: 800;
+            background: rgba(0,0,0,0.68);
+            border: 1px solid #2c2c2c;
             border-radius: 5px;
+            padding: 3px 9px;
+            font-size: 0.68rem;
+            color: #888;
+            pointer-events: none;
+        }
+
+        .timeline-bar {
+            position: absolute;
+            bottom: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 800;
+            background: rgba(10,10,10,0.88);
+            backdrop-filter: blur(6px);
+            border: 1px solid #2a2a2a;
+            border-radius: 22px;
+            padding: 5px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tl-btn {
+            background: none;
+            border: 1px solid #353535;
+            color: #bbb;
+            border-radius: 4px;
+            padding: 3px 9px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .tl-btn:hover { background: #1c1c1c; color: #eee; }
+
+        .tl-label { font-size: 0.78rem; color: #888; min-width: 82px; text-align: center; }
+        .tl-src   { font-size: 0.62rem; color: #333; }
+
+        /* ── AFD ───────────────────────────────────────────────── */
+        #view-afd {
+            background: #0d0d0d;
+            overflow-y: auto;
+        }
+
+        .afd-header {
+            padding: 11px 16px;
+            background: #141414;
+            border-bottom: 1px solid #202020;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .afd-header h2 { font-size: 0.9rem; font-weight: 600; }
+        .afd-issued    { font-size: 0.7rem; color: #555; }
+
+        .afd-refresh {
+            margin-left: auto;
+            background: none;
+            border: 1px solid #2c2c2c;
+            color: #666;
+            border-radius: 4px;
+            padding: 3px 9px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        .afd-refresh:hover { background: #1a1a1a; color: #bbb; }
+
+        .afd-body {
+            padding: 14px 16px 24px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.77rem;
+            line-height: 1.72;
+            white-space: pre-wrap;
+            color: #bbb;
+        }
+
+        .afd-state {
+            padding: 48px 20px;
             text-align: center;
-            width: 80%;
+            color: #3a3a3a;
+            font-size: 0.88rem;
         }
 
-        .buttons-frame a:hover {
-            background-color: #555;
-        }
-
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-
+        /* ── Mobile portrait ───────────────────────────────────── */
         @media (max-width: 768px) and (orientation: portrait) {
-            .container {
-                flex-direction: column-reverse;
-            }
-
-            .buttons-frame {
-                flex-basis: 20%;
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-                justify-content: center;
+            .app { flex-direction: column; }
+            .content { order: 1; flex: 1; min-height: 0; }
+            .sidebar {
+                order: 2;
                 width: 100%;
-                padding-bottom: 20vh; /* Add padding to avoid being blocked by browser UI */
-            }
-
-            .content-frame {
-                flex-basis: 80%;
-                width: 100%;
-            }
-
-            .buttons-frame a {
-                width: calc(50% - 20px); /* Adjust button width to fit within the screen proportionally */
-                margin: 0;
-            }
-        }
-
-        @media (max-width: 768px) and (orientation: landscape),
-        @media (min-width: 769px) {
-            .container {
                 flex-direction: row;
+                justify-content: center;
+                padding: 8px 10px env(safe-area-inset-bottom, 10px);
+                border-right: none;
+                border-top: 1px solid #2a2a2a;
+                gap: 8px;
+                flex-shrink: 0;
+                height: auto;
             }
-
-            .buttons-frame {
-                flex-basis: 20%;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                padding-bottom: 0;
-                justify-content: flex-start; /* Align buttons to the top */
+            .sidebar-label, .loc-pill { display: none; }
+            .nav-btn {
+                width: auto;
+                flex: 1;
+                max-width: 120px;
+                padding: 11px 6px;
+                font-size: 0.84rem;
             }
-
-            .content-frame {
-                flex-basis: 80%;
-                width: 100%;
-            }
-
-            .buttons-frame a {
-                width: 80%;
-                margin: 10px;
-            }
-        }
-
-        .label {
-            color: #fff;
-            margin-bottom: 10px;
-            text-align: center;
-            width: 100%;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="buttons-frame">
-            <div class="label">Current Conditions</div>
-            <a href="https://radar.weather.gov/ridge/standard/CONUS_loop.gif?c=" target="content-frame">Radar</a>
-            <a href="https://example.com" target="content-frame">Button 2</a>
-            <a href="https://www.ready.noaa.gov/data/forecast/grads/hrrrp/panel11/anim.gif" target="content-frame">Radar</a>
-            <a href="https://example.com" target="content-frame">Button 4</a>
+<div class="app">
+    <nav class="sidebar">
+        <div class="sidebar-label">Weather</div>
+        <button class="nav-btn active" onclick="showView('radar', this)">Radar</button>
+        <button class="nav-btn"        onclick="showView('hrrr',  this)">HRRR Fcst</button>
+        <button class="nav-btn"        onclick="showView('afd',   this)">AFD</button>
+        <div class="loc-pill" id="loc-pill">Locating…</div>
+    </nav>
+
+    <main class="content">
+        <!-- Radar -->
+        <div id="view-radar" class="view active">
+            <div id="map-radar"></div>
+            <div class="map-badge">NEXRAD Composite</div>
+            <div class="timeline-bar">
+                <button class="tl-btn" onclick="stepFrame('radar',-1)">◀</button>
+                <span class="tl-label" id="radar-lbl">Loading…</span>
+                <button class="tl-btn" onclick="stepFrame('radar', 1)">▶</button>
+                <button class="tl-btn" id="radar-play" onclick="togglePlay('radar')">▶ Play</button>
+                <span class="tl-src">RainViewer</span>
+            </div>
         </div>
-        <div class="content-frame">
-            <iframe id="mainFrame" name="content-frame"></iframe>
+
+        <!-- HRRR Forecast -->
+        <div id="view-hrrr" class="view">
+            <div id="map-hrrr"></div>
+            <div class="map-badge">HRRR Reflectivity Fcst</div>
+            <div class="timeline-bar">
+                <button class="tl-btn" onclick="stepFrame('hrrr',-1)">◀</button>
+                <span class="tl-label" id="hrrr-lbl">F+00h</span>
+                <button class="tl-btn" onclick="stepFrame('hrrr', 1)">▶</button>
+                <button class="tl-btn" id="hrrr-play" onclick="togglePlay('hrrr')">▶ Play</button>
+                <span class="tl-src">IEM / HRRR</span>
+            </div>
         </div>
-    </div>
+
+        <!-- AFD -->
+        <div id="view-afd" class="view">
+            <div class="afd-header">
+                <h2 id="afd-title">Area Forecast Discussion</h2>
+                <span class="afd-issued" id="afd-issued"></span>
+                <button class="afd-refresh" onclick="loadAFD(true)">↻ Refresh</button>
+            </div>
+            <div id="afd-body" class="afd-state">Awaiting location…</div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Globals ─────────────────────────────────────────────────────────────────
+let userLat = null, userLon = null;
+let radarMap = null, hrrrMap = null;
+
+// RainViewer state (radar tab)
+const rv = { frames: [], layers: {}, idx: 0, timer: null };
+
+// HRRR state
+const MAX_HRRR_HOUR = 18;
+const hr = { layers: {}, idx: 0, timer: null };
+
+// AFD
+let afdLoaded = false;
+
+// ── View switching ───────────────────────────────────────────────────────────
+function showView(name, btn) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('view-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'radar' && radarMap) setTimeout(() => radarMap.invalidateSize(), 80);
+    if (name === 'hrrr'  && hrrrMap)  setTimeout(() => hrrrMap.invalidateSize(), 80);
+    if (name === 'afd')               loadAFD();
+}
+
+// ── Bullseye marker ──────────────────────────────────────────────────────────
+function makeBullseye() {
+    return L.divIcon({
+        className: '',
+        iconSize:   [42, 42],
+        iconAnchor: [21, 21],
+        html: `<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42">
+          <circle cx="21" cy="21" r="19" fill="none" stroke="#e74c3c" stroke-width="2.5"/>
+          <circle cx="21" cy="21" r="9.5" fill="none" stroke="#e74c3c" stroke-width="2.5"/>
+          <circle cx="21" cy="21" r="3"   fill="#e74c3c"/>
+          <line x1="21" y1="0"  x2="21" y2="9"  stroke="#e74c3c" stroke-width="2.5"/>
+          <line x1="21" y1="33" x2="21" y2="42" stroke="#e74c3c" stroke-width="2.5"/>
+          <line x1="0"  y1="21" x2="9"  y2="21" stroke="#e74c3c" stroke-width="2.5"/>
+          <line x1="33" y1="21" x2="42" y2="21" stroke="#e74c3c" stroke-width="2.5"/>
+        </svg>`
+    });
+}
+
+// ── Dark basemap tiles ───────────────────────────────────────────────────────
+function cartoDark() {
+    return L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        { attribution: '©OpenStreetMap contributors, ©CARTO', subdomains: 'abcd', maxZoom: 19 }
+    );
+}
+
+// ── Initialize both Leaflet maps ─────────────────────────────────────────────
+function initMaps() {
+    radarMap = L.map('map-radar').setView([userLat, userLon], 7);
+    cartoDark().addTo(radarMap);
+    L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(radarMap);
+
+    hrrrMap = L.map('map-hrrr').setView([userLat, userLon], 7);
+    cartoDark().addTo(hrrrMap);
+    L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(hrrrMap);
+
+    loadRainViewer();
+    buildHrrrLayers();
+}
+
+// ── RainViewer — animated current radar ─────────────────────────────────────
+function loadRainViewer() {
+    fetch('https://api.rainviewer.com/public/weather-maps.json')
+        .then(r => r.json())
+        .then(data => {
+            rv.frames = data.radar.past;
+            const host = data.host || 'https://tilecache.rainviewer.com';
+            rv.frames.forEach(f => {
+                rv.layers[f.time] = L.tileLayer(
+                    `${host}/v2/radar/${f.path}/256/{z}/{x}/{y}/2/1_1.png`,
+                    { opacity: 0.72, zIndex: 5, tileSize: 256 }
+                );
+            });
+            rv.idx = rv.frames.length - 1;
+            showRvFrame(rv.idx);
+        })
+        .catch(() => {
+            document.getElementById('radar-lbl').textContent = 'Load error';
+        });
+}
+
+function showRvFrame(i) {
+    const f = rv.frames[i];
+    if (!f) return;
+    Object.values(rv.layers).forEach(l => { if (radarMap.hasLayer(l)) radarMap.removeLayer(l); });
+    rv.layers[f.time].addTo(radarMap);
+    const d = new Date(f.time * 1000);
+    document.getElementById('radar-lbl').textContent =
+        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ── IEM HRRR WMS — composite reflectivity forecast ──────────────────────────
+// Iowa Environmental Mesonet provides HRRR model output as public WMS.
+// Layers are named refc_f000 through refc_f018 (analysis + 18 forecast hours).
+const IEM_HRRR_WMS = 'https://mesonet.agron.iastate.edu/cgi-bin/wms/hrrr/refc.cgi?';
+
+function buildHrrrLayers() {
+    for (let h = 0; h <= MAX_HRRR_HOUR; h++) {
+        const pad = String(h).padStart(3, '0');
+        hr.layers[h] = L.tileLayer.wms(IEM_HRRR_WMS, {
+            layers:      `refc_f${pad}`,
+            format:      'image/png',
+            transparent: true,
+            opacity:     0.72,
+            version:     '1.3.0',
+            zIndex:      5
+        });
+    }
+    showHrrrFrame(0);
+}
+
+function showHrrrFrame(h) {
+    Object.values(hr.layers).forEach(l => { if (hrrrMap.hasLayer(l)) hrrrMap.removeLayer(l); });
+    hr.layers[h].addTo(hrrrMap);
+    document.getElementById('hrrr-lbl').textContent =
+        h === 0 ? 'Analysis' : `F+${String(h).padStart(2, '0')}h`;
+}
+
+// ── Step & play controls ─────────────────────────────────────────────────────
+function stepFrame(which, dir) {
+    if (which === 'radar') {
+        rv.idx = Math.max(0, Math.min(rv.frames.length - 1, rv.idx + dir));
+        showRvFrame(rv.idx);
+    } else {
+        hr.idx = Math.max(0, Math.min(MAX_HRRR_HOUR, hr.idx + dir));
+        showHrrrFrame(hr.idx);
+    }
+}
+
+function togglePlay(which) {
+    if (which === 'radar') {
+        if (rv.timer) {
+            clearInterval(rv.timer);
+            rv.timer = null;
+            document.getElementById('radar-play').textContent = '▶ Play';
+        } else {
+            rv.timer = setInterval(() => {
+                rv.idx = (rv.idx + 1) % rv.frames.length;
+                showRvFrame(rv.idx);
+            }, 500);
+            document.getElementById('radar-play').textContent = '⏸ Pause';
+        }
+    } else {
+        if (hr.timer) {
+            clearInterval(hr.timer);
+            hr.timer = null;
+            document.getElementById('hrrr-play').textContent = '▶ Play';
+        } else {
+            hr.timer = setInterval(() => {
+                hr.idx = (hr.idx + 1) % (MAX_HRRR_HOUR + 1);
+                showHrrrFrame(hr.idx);
+            }, 700);
+            document.getElementById('hrrr-play').textContent = '⏸ Pause';
+        }
+    }
+}
+
+// ── AFD — NWS API ────────────────────────────────────────────────────────────
+async function loadAFD(force = false) {
+    if (afdLoaded && !force) return;
+    if (userLat === null) return;
+
+    afdLoaded = false;
+    const body = document.getElementById('afd-body');
+    body.className = 'afd-state';
+    body.textContent = 'Loading…';
+    document.getElementById('afd-issued').textContent = '';
+
+    try {
+        const hdrs = { 'User-Agent': 'PersonalWeatherDashboard/1.0 (personal use)' };
+
+        const ptRes  = await fetch(
+            `https://api.weather.gov/points/${userLat.toFixed(4)},${userLon.toFixed(4)}`,
+            { headers: hdrs }
+        );
+        if (!ptRes.ok) throw new Error('Location not covered by NWS (outside US?)');
+        const pt  = await ptRes.json();
+        const cwa = pt.properties?.cwa;
+        if (!cwa) throw new Error('Could not determine forecast office');
+
+        document.getElementById('afd-title').textContent =
+            `Area Forecast Discussion — ${cwa}`;
+
+        const prodRes  = await fetch(
+            `https://api.weather.gov/products?type=AFD&location=${cwa}&limit=1`,
+            { headers: hdrs }
+        );
+        const prodData = await prodRes.json();
+        const item     = prodData['@graph']?.[0];
+        if (!item) throw new Error('No AFD products found for ' + cwa);
+
+        const afdRes  = await fetch(item['@id'], { headers: hdrs });
+        const afd     = await afdRes.json();
+
+        document.getElementById('afd-issued').textContent =
+            'Issued ' + new Date(afd.issuanceTime).toLocaleString();
+        body.className = 'afd-body';
+        body.textContent = afd.productText;
+        afdLoaded = true;
+    } catch (e) {
+        body.className = 'afd-state';
+        body.textContent = `Error: ${e.message}`;
+    }
+}
+
+// ── Geolocation & boot ───────────────────────────────────────────────────────
+function start(la, lo) {
+    userLat = la;
+    userLon = lo;
+    const latStr = la >= 0 ? la.toFixed(3) + '°N' : Math.abs(la).toFixed(3) + '°S';
+    const lonStr = lo >= 0 ? lo.toFixed(3) + '°E' : Math.abs(lo).toFixed(3) + '°W';
+    document.getElementById('loc-pill').textContent = latStr + '\n' + lonStr;
+    initMaps();
+}
+
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+        p  => start(p.coords.latitude, p.coords.longitude),
+        () => start(39.5, -98.35)  // geographic center of US as fallback
+    );
+} else {
+    start(39.5, -98.35);
+}
+</script>
 </body>
 </html>
