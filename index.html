@@ -85,9 +85,9 @@
         }
         .view.active { display: flex; }
 
-        #map-radar, #map-hrrr { flex: 1; min-height: 0; }
+        /* ── Radar (Leaflet) ───────────────────────────────────── */
+        #map-radar { flex: 1; min-height: 0; }
 
-        /* ── Map overlays ──────────────────────────────────────── */
         .map-badge {
             position: absolute;
             top: 10px;
@@ -132,6 +132,31 @@
 
         .tl-label { font-size: 0.78rem; color: #888; min-width: 82px; text-align: center; }
         .tl-src   { font-size: 0.62rem; color: #333; }
+
+        /* ── HRRR (iframe + bullseye overlay) ──────────────────── */
+        .iframe-wrap {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .iframe-wrap iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Centered bullseye — sits at the viewport midpoint */
+        .bullseye-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            pointer-events: none;
+        }
 
         /* ── AFD ───────────────────────────────────────────────── */
         #view-afd {
@@ -221,33 +246,45 @@
     </nav>
 
     <main class="content">
-        <!-- Radar -->
+
+        <!-- ── Radar ─────────────────────────────────────────── -->
         <div id="view-radar" class="view active">
             <div id="map-radar"></div>
-            <div class="map-badge">NEXRAD Composite</div>
+            <div class="map-badge">NWS NEXRAD</div>
             <div class="timeline-bar">
-                <button class="tl-btn" onclick="stepFrame('radar',-1)">◀</button>
+                <button class="tl-btn" onclick="stepRadar(-1)">◀</button>
                 <span class="tl-label" id="radar-lbl">Loading…</span>
-                <button class="tl-btn" onclick="stepFrame('radar', 1)">▶</button>
-                <button class="tl-btn" id="radar-play" onclick="togglePlay('radar')">▶ Play</button>
-                <span class="tl-src">RainViewer</span>
+                <button class="tl-btn" onclick="stepRadar(1)">▶</button>
+                <button class="tl-btn" id="radar-play" onclick="toggleRadarPlay()">▶ Play</button>
+                <span class="tl-src">NWS</span>
             </div>
         </div>
 
-        <!-- HRRR Forecast -->
+        <!-- ── HRRR (COD iframe) ──────────────────────────────── -->
         <div id="view-hrrr" class="view">
-            <div id="map-hrrr"></div>
-            <div class="map-badge">HRRR Reflectivity Fcst</div>
-            <div class="timeline-bar">
-                <button class="tl-btn" onclick="stepFrame('hrrr',-1)">◀</button>
-                <span class="tl-label" id="hrrr-lbl">F+00h</span>
-                <button class="tl-btn" onclick="stepFrame('hrrr', 1)">▶</button>
-                <button class="tl-btn" id="hrrr-play" onclick="togglePlay('hrrr')">▶ Play</button>
-                <span class="tl-src">IEM / HRRR</span>
+            <div class="iframe-wrap">
+                <iframe
+                    id="hrrr-iframe"
+                    src="https://weather.cod.edu/forecast/"
+                    title="HRRR Forecast — College of DuPage NEXLAB"
+                    allowfullscreen>
+                </iframe>
+                <!-- Bullseye centered on viewport; navigate COD map to your area -->
+                <div class="bullseye-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
+                        <circle cx="26" cy="26" r="23" fill="none" stroke="#e74c3c" stroke-width="2.5" stroke-dasharray="none" opacity="0.9"/>
+                        <circle cx="26" cy="26" r="12" fill="none" stroke="#e74c3c" stroke-width="2.5" opacity="0.9"/>
+                        <circle cx="26" cy="26" r="3.5" fill="#e74c3c" opacity="0.9"/>
+                        <line x1="26" y1="0"  x2="26" y2="12" stroke="#e74c3c" stroke-width="2.5" opacity="0.9"/>
+                        <line x1="26" y1="40" x2="26" y2="52" stroke="#e74c3c" stroke-width="2.5" opacity="0.9"/>
+                        <line x1="0"  y1="26" x2="12" y2="26" stroke="#e74c3c" stroke-width="2.5" opacity="0.9"/>
+                        <line x1="40" y1="26" x2="52" y2="26" stroke="#e74c3c" stroke-width="2.5" opacity="0.9"/>
+                    </svg>
+                </div>
             </div>
         </div>
 
-        <!-- AFD -->
+        <!-- ── AFD ───────────────────────────────────────────── -->
         <div id="view-afd" class="view">
             <div class="afd-header">
                 <h2 id="afd-title">Area Forecast Discussion</h2>
@@ -256,6 +293,7 @@
             </div>
             <div id="afd-body" class="afd-state">Awaiting location…</div>
         </div>
+
     </main>
 </div>
 
@@ -263,16 +301,19 @@
 <script>
 // ── Globals ─────────────────────────────────────────────────────────────────
 let userLat = null, userLon = null;
-let radarMap = null, hrrrMap = null;
+let radarMap = null;
 
-// RainViewer state (radar tab)
-const rv = { frames: [], layers: {}, idx: 0, timer: null };
+// Radar animation state
+const RADAR_FRAMES = 12;          // 12 × 5 min = 1 hr loop
+const RADAR_INTERVAL_MS = 5 * 60 * 1000;
+let radarLayers = [];             // [{isoTime, layer}]
+let radarIdx = 0;
+let radarTimer = null;
 
-// HRRR state
-const MAX_HRRR_HOUR = 18;
-const hr = { layers: {}, idx: 0, timer: null };
+// NWS opengeo WMS — CONUS composite base reflectivity
+const NWS_WMS = 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?';
 
-// AFD
+// AFD state
 let afdLoaded = false;
 
 // ── View switching ───────────────────────────────────────────────────────────
@@ -282,11 +323,10 @@ function showView(name, btn) {
     document.getElementById('view-' + name).classList.add('active');
     btn.classList.add('active');
     if (name === 'radar' && radarMap) setTimeout(() => radarMap.invalidateSize(), 80);
-    if (name === 'hrrr'  && hrrrMap)  setTimeout(() => hrrrMap.invalidateSize(), 80);
-    if (name === 'afd')               loadAFD();
+    if (name === 'afd') loadAFD();
 }
 
-// ── Bullseye marker ──────────────────────────────────────────────────────────
+// ── Bullseye icon (for Leaflet map) ─────────────────────────────────────────
 function makeBullseye() {
     return L.divIcon({
         className: '',
@@ -304,126 +344,85 @@ function makeBullseye() {
     });
 }
 
-// ── Dark basemap tiles ───────────────────────────────────────────────────────
-function cartoDark() {
-    return L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-        { attribution: '©OpenStreetMap contributors, ©CARTO', subdomains: 'abcd', maxZoom: 19 }
-    );
-}
+// ── Build time-stamped WMS layers for animation ──────────────────────────────
+// Generates RADAR_FRAMES layers stepping back in 5-min increments.
+// NWS WMS supports the TIME parameter (ISO 8601) for historical NEXRAD data.
+function buildRadarLayers() {
+    radarLayers = [];
+    const now = Date.now();
 
-// ── Initialize both Leaflet maps ─────────────────────────────────────────────
-function initMaps() {
-    radarMap = L.map('map-radar').setView([userLat, userLon], 7);
-    cartoDark().addTo(radarMap);
-    L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(radarMap);
+    for (let i = RADAR_FRAMES - 1; i >= 0; i--) {
+        // Round each step to the nearest 5-minute mark
+        const raw = now - i * RADAR_INTERVAL_MS;
+        const snapped = Math.floor(raw / RADAR_INTERVAL_MS) * RADAR_INTERVAL_MS;
+        const iso = new Date(snapped).toISOString();
 
-    hrrrMap = L.map('map-hrrr').setView([userLat, userLon], 7);
-    cartoDark().addTo(hrrrMap);
-    L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(hrrrMap);
-
-    loadRainViewer();
-    buildHrrrLayers();
-}
-
-// ── RainViewer — animated current radar ─────────────────────────────────────
-function loadRainViewer() {
-    fetch('https://api.rainviewer.com/public/weather-maps.json')
-        .then(r => r.json())
-        .then(data => {
-            rv.frames = data.radar.past;
-            const host = data.host || 'https://tilecache.rainviewer.com';
-            rv.frames.forEach(f => {
-                rv.layers[f.time] = L.tileLayer(
-                    `${host}/v2/radar/${f.path}/256/{z}/{x}/{y}/2/1_1.png`,
-                    { opacity: 0.72, zIndex: 5, tileSize: 256 }
-                );
-            });
-            rv.idx = rv.frames.length - 1;
-            showRvFrame(rv.idx);
-        })
-        .catch(() => {
-            document.getElementById('radar-lbl').textContent = 'Load error';
-        });
-}
-
-function showRvFrame(i) {
-    const f = rv.frames[i];
-    if (!f) return;
-    Object.values(rv.layers).forEach(l => { if (radarMap.hasLayer(l)) radarMap.removeLayer(l); });
-    rv.layers[f.time].addTo(radarMap);
-    const d = new Date(f.time * 1000);
-    document.getElementById('radar-lbl').textContent =
-        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-// ── IEM HRRR WMS — composite reflectivity forecast ──────────────────────────
-// Iowa Environmental Mesonet provides HRRR model output as public WMS.
-// Layers are named refc_f000 through refc_f018 (analysis + 18 forecast hours).
-const IEM_HRRR_WMS = 'https://mesonet.agron.iastate.edu/cgi-bin/wms/hrrr/refc.cgi?';
-
-function buildHrrrLayers() {
-    for (let h = 0; h <= MAX_HRRR_HOUR; h++) {
-        const pad = String(h).padStart(3, '0');
-        hr.layers[h] = L.tileLayer.wms(IEM_HRRR_WMS, {
-            layers:      `refc_f${pad}`,
+        const layer = L.tileLayer.wms(NWS_WMS, {
+            layers:      'conus_bref_qcd',
             format:      'image/png',
             transparent: true,
-            opacity:     0.72,
+            opacity:     0.75,
             version:     '1.3.0',
-            zIndex:      5
+            zIndex:      5,
+            TIME:        iso
         });
+
+        radarLayers.push({ iso, layer });
     }
-    showHrrrFrame(0);
+
+    radarIdx = radarLayers.length - 1;
+    showRadarFrame(radarIdx);
 }
 
-function showHrrrFrame(h) {
-    Object.values(hr.layers).forEach(l => { if (hrrrMap.hasLayer(l)) hrrrMap.removeLayer(l); });
-    hr.layers[h].addTo(hrrrMap);
-    document.getElementById('hrrr-lbl').textContent =
-        h === 0 ? 'Analysis' : `F+${String(h).padStart(2, '0')}h`;
+// ── Display a radar frame ────────────────────────────────────────────────────
+function showRadarFrame(i) {
+    const entry = radarLayers[i];
+    if (!entry || !radarMap) return;
+
+    radarLayers.forEach(e => { if (radarMap.hasLayer(e.layer)) radarMap.removeLayer(e.layer); });
+    entry.layer.addTo(radarMap);
+
+    const d = new Date(entry.iso);
+    document.getElementById('radar-lbl').textContent =
+        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+        (i === radarLayers.length - 1 ? ' ★' : '');
 }
 
-// ── Step & play controls ─────────────────────────────────────────────────────
-function stepFrame(which, dir) {
-    if (which === 'radar') {
-        rv.idx = Math.max(0, Math.min(rv.frames.length - 1, rv.idx + dir));
-        showRvFrame(rv.idx);
+// ── Radar step & play ────────────────────────────────────────────────────────
+function stepRadar(dir) {
+    radarIdx = Math.max(0, Math.min(radarLayers.length - 1, radarIdx + dir));
+    showRadarFrame(radarIdx);
+}
+
+function toggleRadarPlay() {
+    if (radarTimer) {
+        clearInterval(radarTimer);
+        radarTimer = null;
+        document.getElementById('radar-play').textContent = '▶ Play';
     } else {
-        hr.idx = Math.max(0, Math.min(MAX_HRRR_HOUR, hr.idx + dir));
-        showHrrrFrame(hr.idx);
+        radarTimer = setInterval(() => {
+            radarIdx = (radarIdx + 1) % radarLayers.length;
+            showRadarFrame(radarIdx);
+        }, 500);
+        document.getElementById('radar-play').textContent = '⏸ Pause';
     }
 }
 
-function togglePlay(which) {
-    if (which === 'radar') {
-        if (rv.timer) {
-            clearInterval(rv.timer);
-            rv.timer = null;
-            document.getElementById('radar-play').textContent = '▶ Play';
-        } else {
-            rv.timer = setInterval(() => {
-                rv.idx = (rv.idx + 1) % rv.frames.length;
-                showRvFrame(rv.idx);
-            }, 500);
-            document.getElementById('radar-play').textContent = '⏸ Pause';
-        }
-    } else {
-        if (hr.timer) {
-            clearInterval(hr.timer);
-            hr.timer = null;
-            document.getElementById('hrrr-play').textContent = '▶ Play';
-        } else {
-            hr.timer = setInterval(() => {
-                hr.idx = (hr.idx + 1) % (MAX_HRRR_HOUR + 1);
-                showHrrrFrame(hr.idx);
-            }, 700);
-            document.getElementById('hrrr-play').textContent = '⏸ Pause';
-        }
-    }
+// ── Init Leaflet radar map ───────────────────────────────────────────────────
+function initRadarMap() {
+    radarMap = L.map('map-radar').setView([userLat, userLon], 7);
+
+    L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        { attribution: '©OpenStreetMap contributors, ©CARTO', subdomains: 'abcd', maxZoom: 19 }
+    ).addTo(radarMap);
+
+    L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(radarMap);
+
+    buildRadarLayers();
 }
 
-// ── AFD — NWS API ────────────────────────────────────────────────────────────
+// ── AFD ──────────────────────────────────────────────────────────────────────
 async function loadAFD(force = false) {
     if (afdLoaded && !force) return;
     if (userLat === null) return;
@@ -437,7 +436,7 @@ async function loadAFD(force = false) {
     try {
         const hdrs = { 'User-Agent': 'PersonalWeatherDashboard/1.0 (personal use)' };
 
-        const ptRes  = await fetch(
+        const ptRes = await fetch(
             `https://api.weather.gov/points/${userLat.toFixed(4)},${userLon.toFixed(4)}`,
             { headers: hdrs }
         );
@@ -457,8 +456,7 @@ async function loadAFD(force = false) {
         const item     = prodData['@graph']?.[0];
         if (!item) throw new Error('No AFD products found for ' + cwa);
 
-        const afdRes  = await fetch(item['@id'], { headers: hdrs });
-        const afd     = await afdRes.json();
+        const afd = await (await fetch(item['@id'], { headers: hdrs })).json();
 
         document.getElementById('afd-issued').textContent =
             'Issued ' + new Date(afd.issuanceTime).toLocaleString();
@@ -478,13 +476,13 @@ function start(la, lo) {
     const latStr = la >= 0 ? la.toFixed(3) + '°N' : Math.abs(la).toFixed(3) + '°S';
     const lonStr = lo >= 0 ? lo.toFixed(3) + '°E' : Math.abs(lo).toFixed(3) + '°W';
     document.getElementById('loc-pill').textContent = latStr + '\n' + lonStr;
-    initMaps();
+    initRadarMap();
 }
 
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
         p  => start(p.coords.latitude, p.coords.longitude),
-        () => start(39.5, -98.35)  // geographic center of US as fallback
+        () => start(39.5, -98.35)
     );
 } else {
     start(39.5, -98.35);
