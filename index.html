@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="WX">
     <title>WX</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
@@ -308,6 +311,7 @@
 // ── Globals ─────────────────────────────────────────────────────────────────
 let userLat = null, userLon = null;
 let radarMap = null, hrrrMap = null;
+let radarMarker = null, hrrrMarker = null;
 
 // Radar animation state
 const RADAR_FRAMES      = 12;             // 12 × 5 min = 1 hr loop
@@ -532,7 +536,7 @@ function initHrrrMap() {
         { attribution: '©OpenStreetMap contributors, ©CARTO', subdomains: 'abcd', maxZoom: 19 }
     ).addTo(hrrrMap);
 
-    L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(hrrrMap);
+    hrrrMarker = L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(hrrrMap);
 
     buildHrrrLayers();
 }
@@ -546,7 +550,7 @@ function initRadarMap() {
         { attribution: '©OpenStreetMap contributors, ©CARTO', subdomains: 'abcd', maxZoom: 19 }
     ).addTo(radarMap);
 
-    L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(radarMap);
+    radarMarker = L.marker([userLat, userLon], { icon: makeBullseye(), zIndexOffset: 9999 }).addTo(radarMap);
 
     buildRadarLayers();
 }
@@ -598,6 +602,40 @@ async function loadAFD(force = false) {
     }
 }
 
+// ── Location helpers ─────────────────────────────────────────────────────────
+// Try the Geolocation API; on failure fall back to a localStorage-cached fix
+// (saved from any previous successful session), then to the CONUS centre.
+// The cache means the PWA survives the separate-permission-context iOS quirk
+// after the user has granted location at least once.
+function geolocate(callback) {
+    if (!navigator.geolocation) { callback(39.5, -98.35, true); return; }
+
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            const la = pos.coords.latitude, lo = pos.coords.longitude;
+            try { localStorage.setItem('wx_lat', la); localStorage.setItem('wx_lon', lo); } catch (_) {}
+            callback(la, lo, false);
+        },
+        () => {
+            try {
+                const la = parseFloat(localStorage.getItem('wx_lat'));
+                const lo = parseFloat(localStorage.getItem('wx_lon'));
+                if (!isNaN(la) && !isNaN(lo)) { callback(la, lo, false); return; }
+            } catch (_) {}
+            callback(39.5, -98.35, true);
+        },
+        { timeout: 10000, enableHighAccuracy: false }
+    );
+}
+
+function applyLocation(la, lo, approximate) {
+    userLat = la; userLon = lo;
+    document.getElementById('loc-pill').textContent = approximate
+        ? 'Location\nunavailable'
+        : (la >= 0 ? la.toFixed(3) + '°N' : Math.abs(la).toFixed(3) + '°S') + '\n' +
+          (lo >= 0 ? lo.toFixed(3) + '°E' : Math.abs(lo).toFixed(3) + '°W');
+}
+
 // ── Reload all data ──────────────────────────────────────────────────────────
 function updateReloadTime() {
     document.getElementById('reload-time').textContent =
@@ -605,53 +643,40 @@ function updateReloadTime() {
 }
 
 function reloadAll() {
+    updateReloadTime();
+
     // Stop any running animations
     if (radarTimer) { clearInterval(radarTimer); radarTimer = null; document.getElementById('radar-play').textContent = '▶ Play'; }
     if (hrrrTimer)  { clearInterval(hrrrTimer);  hrrrTimer  = null; document.getElementById('hrrr-play').textContent  = '▶ Play'; }
 
-    // Rebuild radar layers with fresh timestamps
-    if (radarMap) {
-        radarLayers.forEach(e => radarMap.removeLayer(e.layer));
-        radarLayers = [];
-        buildRadarLayers();
-    }
+    // Re-request location, then rebuild everything so the maps re-centre
+    // if a better fix is now available (e.g. after granting permission in Settings).
+    geolocate((la, lo, approximate) => {
+        const moved = la !== userLat || lo !== userLon;
+        applyLocation(la, lo, approximate);
 
-    // Rebuild HRRR layers if the map has been initialised; otherwise it
-    // will pick up a fresh run time the next time the tab is opened.
-    if (hrrrMap) {
-        hrrrLayers.forEach(e => hrrrMap.removeLayer(e.layer));
-        hrrrLayers = [];
-        buildHrrrLayers();
-    } else {
-        hrrrLayers = [];
-    }
+        if (moved) {
+            if (radarMap && radarMarker) { radarMap.setView([la, lo], radarMap.getZoom()); radarMarker.setLatLng([la, lo]); }
+            if (hrrrMap  && hrrrMarker)  { hrrrMap.setView([la, lo],  hrrrMap.getZoom());  hrrrMarker.setLatLng([la, lo]);  }
+        }
 
-    // Mark AFD stale; refetch immediately if that tab is currently visible
-    afdLoaded = false;
-    if (document.getElementById('view-afd').classList.contains('active')) loadAFD();
+        if (radarMap) { radarLayers.forEach(e => radarMap.removeLayer(e.layer)); radarLayers = []; buildRadarLayers(); }
+        if (hrrrMap)  { hrrrLayers.forEach(e => hrrrMap.removeLayer(e.layer));   hrrrLayers  = []; buildHrrrLayers();  }
+        else          { hrrrLayers = []; }
 
-    updateReloadTime();
+        afdLoaded = false;
+        if (document.getElementById('view-afd').classList.contains('active')) loadAFD();
+    });
 }
 
-// ── Geolocation & boot ───────────────────────────────────────────────────────
-function start(la, lo) {
-    userLat = la;
-    userLon = lo;
-    const latStr = la >= 0 ? la.toFixed(3) + '°N' : Math.abs(la).toFixed(3) + '°S';
-    const lonStr = lo >= 0 ? lo.toFixed(3) + '°E' : Math.abs(lo).toFixed(3) + '°W';
-    document.getElementById('loc-pill').textContent = latStr + '\n' + lonStr;
+// ── Boot ─────────────────────────────────────────────────────────────────────
+function start(la, lo, approximate) {
+    applyLocation(la, lo, approximate);
     initRadarMap();
     updateReloadTime();
 }
 
-if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-        p  => start(p.coords.latitude, p.coords.longitude),
-        () => start(39.5, -98.35)
-    );
-} else {
-    start(39.5, -98.35);
-}
+geolocate(start);
 </script>
 </body>
 </html>
