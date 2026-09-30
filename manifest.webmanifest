@@ -1,0 +1,12 @@
+{
+    "name": "WX",
+    "short_name": "WX",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#111111",
+    "theme_color": "#111111",
+    "icons": [
+        { "src": "apple_touch_icon.png", "sizes": "180x180", "type": "image/png" }
+    ]
+}
